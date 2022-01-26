@@ -4,5 +4,10 @@ controller:
     annotations:
       load-balancer.hetzner.cloud/name: nginx-ingress
       load-balancer.hetzner.cloud/use-private-ip: true
-      load-balancer.hetzner.cloud/location: fsn1
+      load-balancer.hetzner.cloud/location: ngb1
       load-balancer.hetzner.cloud/type: lb11
+      load-balancer.hetzner.cloud/uses-proxyprotocol: true
+  config:
+    use-forwarded-headers: true
+    compute-full-forwarded-for: true
+    use-proxy-protocol: true
