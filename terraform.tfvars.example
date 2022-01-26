@@ -1,3 +1,9 @@
 hcloud_token = "mL2oj8Xaxc0AC0uo5LM5NnBlqW8UFjPclc9ZoDIhcKc7ejKgNsjDT6EuObcf5Ia7I"
 public_key   = "/home/myuser/.ssh/id_ed25519.pub"
 private_key  = "/home/myuser/.ssh/id_ed25519"
+
+servers_num = 1
+agents_num = 1
+location = "nbg1"
+agent_server_type = "cpx11"
+control_plane_server_type = "cpx11"
