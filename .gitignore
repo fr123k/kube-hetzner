@@ -1,4 +1,5 @@
-.terraform*
+.vscode
+.terraform
 *.tfstate*
 crash.log
 kubeconfig.yaml
