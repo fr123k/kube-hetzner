@@ -32,7 +32,6 @@ variable "location" {
   default     = "fsn1"
 }
 
-
 variable "control_plane_server_type" {
   description = "Default control plane server type"
   default     = "cx11"
