@@ -1,3 +1,7 @@
+data "hcloud_server" "wireguard" {
+  name = "wireguard"
+}
+
 resource "random_password" "k3s_token" {
   length  = 48
   special = false
@@ -58,32 +62,32 @@ resource "hcloud_firewall" "k3s" {
     ]
   }
 
-  # Allow all traffic to the kube api server
+  # Allow only vpn traffic to the kube api server
   rule {
     direction = "in"
     protocol  = "tcp"
     port      = "6443"
     source_ips = [
-      "0.0.0.0/0"
+      "${data.hcloud_server.wireguard.ipv4_address}/32"
     ]
   }
 
-  # Allow all traffic to the ssh port
+  # Allow only vpn traffic to the ssh port
   rule {
     direction = "in"
     protocol  = "tcp"
     port      = "22"
     source_ips = [
-      "0.0.0.0/0"
+      "${data.hcloud_server.wireguard.ipv4_address}/32"
     ]
   }
 
-  # Allow ping on ipv4
+  # Allow only vpn to ping on ipv4
   rule {
     direction = "in"
     protocol  = "icmp"
     source_ips = [
-      "0.0.0.0/0"
+      "${data.hcloud_server.wireguard.ipv4_address}/32"
     ]
   }
 }
