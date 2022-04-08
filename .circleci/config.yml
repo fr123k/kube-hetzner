@@ -1,0 +1,184 @@
+circleci-image: &circleci-image
+  - image: fr123k/circleci-base:latest
+
+master-filter: &master-filter
+  filters:
+    branches:
+      only:
+        - master
+
+preflight-master-filter: &preflight-master-filter
+  <<: *master-filter
+  requires:
+    - preflight
+
+non-master-filter: &non-master-filter
+  filters:
+    branches:
+      ignore:
+        - master
+
+preflight-non-master-filter: &preflight-non-master-filter
+  <<: *non-master-filter
+  requires:
+    - preflight
+
+version: 2.1
+commands:
+  run-terraform-fmt:
+    steps:
+      - run:
+          name: check hcl syntax with terraform fmt
+          command: |
+            # terraform modules check
+            for mod in $(find ./modules -type d); do terraform fmt -check ${mod}; done
+            # iterate over the tf files changed in this pr and run terraform fmt
+            for tffile in $(git diff master...HEAD --name-status --diff-filter=ACMR | awk '{print $2}' | grep -v "boilerplate" | grep ".tf\|.tfvars"); do
+
+              tftarget=$(echo $tffile | rev | cut -d'/' -f3- | rev)
+
+              terraform fmt -check -diff -recursive ${tftarget}
+
+            done
+  run-terraform-plan:
+    parameters:
+      git_diff:
+        type: string
+        default: "origin/master...HEAD"
+      command:
+        type: string
+        default: "plan"
+    steps:
+      - run:
+          name: terraform plan
+          command: |
+            git_diff=<< parameters.git_diff >>
+
+            rm -fv terraform-plan.out
+
+            git --no-pager diff ${git_diff} --name-status --diff-filter=ACMR
+
+            # iterate over the .tfvars and .tf changed files in this pr and try to run terraform plan
+            for tfvarfile in $(git diff ${git_diff} --name-status --diff-filter=ACMR | awk '{print $2}' | grep -E "(.*.tf|.*.tfvars)"); do
+
+              tffile=$(echo $tfvarfile)
+
+              # Avoid multiple terraform plan execution in the same folder because both .tfvars and .tf file were changed.
+              # if the .terraform folder already exist then terraform plan was already executed so skip it.
+              if [[ -d "${tffile}/.terraform" ]]; then
+                echo "Skip Terraform init/plan for target: ${tffile} already done"
+                continue
+              fi
+
+              echo "Running Terraform plan for target: ${tfvarfile}"
+              make target=${tfvarfile} cliargs=-no-color tfinit tfplan 2>&1 | tee -a terraform-plan.out
+            done
+
+  post-terraform-plan:
+    parameters:
+      command:
+        type: string
+        default: ""
+      pr_number:
+        type: string
+        default: "echo ${CIRCLE_PULL_REQUEST##*/}"
+    steps:
+      - run:
+          name: post terraform << parameters.command >>
+          command: |
+            cmd=<< parameters.command >>
+
+            export CMD=${cmd}
+            export PR_NUMBER=$(<< parameters.pr_number >>)
+            echo "PR_NUMBER ${PR_NUMBER}"
+
+            if [[ ! -z "${PR_NUMBER}" && -f "terraform-${cmd}.out" ]]; then
+              github-comment hide --config .circleci/github-comment.yaml -pr ${PR_NUMBER} -k plan
+              export TERRAFORM_RESOURCE_SUMMARY=$(cat terraform-${cmd}.out | grep -E '(^.*[#] .*|^[[:punct:]]{2})' | grep -v "unchanged attributes hidden" | grep -v "unchanged attribute hidden" | grep -v "unchanged block hidden")
+              export TERRAFORM_PLAN_SUMMARY=$(cat terraform-${cmd}.out | grep -E '(Plan)')
+              export TERRAFORM_ERROR=$(cat terraform-${cmd}.out | grep "Error:")
+
+              github-comment exec --config .circleci/github-comment.yaml -pr ${PR_NUMBER} -k plan -- cat terraform-${cmd}.out
+            fi
+          when: always
+  run-terraform-apply:
+    parameters:
+      git_diff:
+        type: string
+        default: "origin/master...HEAD"
+      command:
+        type: string
+        default: "apply"
+    steps:
+      - run:
+          name: terraform apply
+          command: |
+            git_diff=<< parameters.git_diff >>
+
+            rm -fv terraform-apply.out
+
+            git --no-pager diff ${git_diff} --name-status --diff-filter=ACMR
+
+            # iterate over the .tfvars and .tf changed files in this pr and try to run terraform apply
+            for tfvarfile in $(git diff ${git_diff} --name-status --diff-filter=ACMR | awk '{print $2}' | grep -E "(.*.tf|.*.tfvars)"); do
+
+              tffile=$(echo $tfvarfile)
+              
+              # Avoid multiple terraform plan execution in the same folder because both .tfvars and .tf file were changed.
+              # if the .terraform folder already exist then terraform plan was already executed so skip it.
+              if [[ -d "${tffile}/.terraform" ]]; then
+                echo "Skip Terraform init/plan for target: ${tffile} already done"
+                continue
+              fi
+
+              echo "Running Terraform plan for target: ${tfvarfile}"
+              make target=${tfvarfile} tfinit tfapply 2>&1 | tee -a terraform-apply.out
+            done
+
+jobs:
+  preflight:
+    docker: *circleci-image
+    resource_class: small
+    steps:
+      - checkout
+      - run-terraform-fmt
+
+  terraform-plan:
+    docker: *circleci-image
+    resource_class: small
+    steps:
+      - checkout
+      - run-terraform-plan
+      - store_artifacts:
+          path: ./terraform-plan.out
+          destination: terraform-plan.out
+      - post-terraform-plan:
+          command: plan
+
+  terraform-apply:
+    docker: *circleci-image
+    resource_class: small
+    steps:
+      - checkout
+      - run-terraform-apply:
+          git_diff: HEAD~1
+      - store_artifacts:
+          path: ./terraform-apply.out
+          destination: terraform-apply.out
+      - post-terraform-plan:
+          command: apply
+          pr_number: "git log --format=format:%s -n 1 | grep -Eo '#([0-9]*)' | cut -c 2-"
+
+workflows:
+  preflight:
+    jobs:
+      - preflight:
+          <<: *non-master-filter
+      - terraform-plan:
+          <<: *preflight-non-master-filter
+  rollout:
+    jobs:
+      - preflight:
+          <<: *master-filter
+      - terraform-apply:
+          <<: *preflight-master-filter
