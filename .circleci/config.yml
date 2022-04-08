@@ -25,6 +25,17 @@ preflight-non-master-filter: &preflight-non-master-filter
 
 version: 2.1
 commands:
+  run-terraform-backend-git:
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "MD5:51:46:ee:a1:2d:3a:c4:7a:c9:b0:8d:9c:96:2e:e3:9d"
+      - run:
+          name: start terraform-backend-git
+          command: |
+
+            TF_BACKEND_HTTP_ENCRYPTION_PASSPHRASE=${TF_BACKEND_HTTP_ENCRYPTION_PASSPHRASE}  terraform-backend-git --access-logs &
+
   run-terraform-fmt:
     steps:
       - run:
@@ -149,6 +160,7 @@ jobs:
     resource_class: small
     steps:
       - checkout
+      - run-terraform-backend-git
       - run-terraform-plan
       - store_artifacts:
           path: ./terraform-plan.out
