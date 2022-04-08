@@ -54,6 +54,7 @@ commands:
           command: |
             git_diff=<< parameters.git_diff >>
 
+            ls -lha ~/.ssh/
             rm -fv terraform-plan.out
 
             git --no-pager diff ${git_diff} --name-status --diff-filter=ACMR
