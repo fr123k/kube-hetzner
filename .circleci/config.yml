@@ -52,6 +52,8 @@ commands:
       - add_ssh_keys:
           fingerprints:
             - "90:f4:0e:ce:92:c1:ab:06:18:d6:08:6d:8b:31:df:e8"
+            - "5f:bb:89:b9:c9:60:4a:bc:2d:9e:6c:f2:80:95:1b:f0"
+
       - run:
           name: start terraform-backend-git
           command: |
@@ -59,9 +61,19 @@ commands:
             ssh -v git@github.com || true
 
       - run:
+          name: generate ssh public key
+          command: |
+             ssh-keygen -y -f ~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0 > ~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0.pub
+
+      - run:
           name: terraform plan
           command: |
             git_diff=<< parameters.git_diff >>
+
+            ## Init needed Terraform Vars like ssh keys, ...
+            export TF_VAR_private_key=~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0
+            export TF_VAR_public_key=~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0.pub
+
             rm -fv terraform-plan.out
             # otherwise the go-git clone command fails
             ssh-add -D
