@@ -88,8 +88,8 @@ commands:
               fi
 
               echo "Running Terraform plan for target: ${tfvarfile}"
-              terraform init 2>&1 | tee -a terraform-plan.out
-              terraform plan -no-color 2>&1 | tee -a terraform-plan.out
+              terraform init -lock-timeout=3m 2>&1 | tee -a terraform-plan.out
+              terraform plan -lock=false -lock-timeout=3m -no-color 2>&1 | tee -a terraform-plan.out
             done
 
   post-terraform-plan:
@@ -168,8 +168,8 @@ commands:
               fi
 
               echo "Running Terraform plan for target: ${tfvarfile}"
-              terraform init 2>&1 | tee -a terraform-apply.out
-              terraform apply -auto-approve -no-color 2>&1 | tee -a terraform-apply.out
+              terraform init -lock-timeout=3m 2>&1 | tee -a terraform-apply.out
+              terraform apply -lock-timeout=3m -auto-approve -no-color 2>&1 | tee -a terraform-apply.out
 
             done
   run-terraform-destroy:
@@ -221,8 +221,8 @@ commands:
               fi
 
               echo "Running Terraform plan for target: ${tfvarfile}"
-              terraform init 2>&1 | tee -a terraform-destroy.out
-              terraform apply -destroy -auto-approve -no-color 2>&1 | tee -a terraform-destroy.out
+              terraform init -lock-timeout=3m 2>&1 | tee -a terraform-destroy.out
+              terraform apply -lock-timeout=3m -destroy -auto-approve -no-color 2>&1 | tee -a terraform-destroy.out
 
             done
           when: always
@@ -250,6 +250,10 @@ jobs:
   terraform-apply:
     docker: *circleci-image
     resource_class: small
+    parameters:
+      destroy:
+        type: boolean
+        default: false
     steps:
       - checkout
       - run-terraform-apply
@@ -260,20 +264,18 @@ jobs:
       - post-terraform-plan:
           command: apply
           # pr_number: "git log --format=format:%s -n 1 | grep -Eo '#([0-9]*)' | cut -c 2-"
+      - when:
+          condition: << parameters.destroy >>
+          steps:
+          - run-terraform-destroy
 
-  terraform-destroy:
-    docker: *circleci-image
-    resource_class: small
-    steps:
-      - checkout
-      - run-terraform-destroy
-        # git_diff: HEAD~1
-      - store_artifacts:
-          path: ./terraform-destroy.out
-          destination: terraform-destroy.out
-      - post-terraform-plan:
-          command: destroy
-          # pr_number: "git log --format=format:%s -n 1 | grep -Eo '#([0-9]*)' | cut -c 2-"
+            # git_diff: HEAD~1
+          - store_artifacts:
+              path: ./terraform-destroy.out
+              destination: terraform-destroy.out
+          - post-terraform-plan:
+              command: destroy
+              # pr_number: "git log --format=format:%s -n 1 | grep -Eo '#([0-9]*)' | cut -c 2-"
 
 workflows:
   preflight:
@@ -290,8 +292,4 @@ workflows:
           <<: *preflight-master-filter
           requires:
             - preflight
-      - terraform-destroy:
-          <<: *preflight-master-filter
-          requires:
-            - terraform-apply
-          when: always
+          destroy: true
