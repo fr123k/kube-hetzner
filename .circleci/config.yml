@@ -41,56 +41,6 @@ commands:
               terraform fmt -check -diff -recursive ${tftarget}
 
             done
-  run-terraform-plan:
-    parameters:
-      git_diff:
-        type: string
-        default: "origin/master...HEAD"
-    steps:
-      - add_ssh_keys:
-          fingerprints:
-            - "90:f4:0e:ce:92:c1:ab:06:18:d6:08:6d:8b:31:df:e8"
-            - "5f:bb:89:b9:c9:60:4a:bc:2d:9e:6c:f2:80:95:1b:f0"
-
-      - run:
-          name: generate ssh public key
-          command: |
-            ssh-keygen -y -f ~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0 > ~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0.pub
-
-      - run:
-          name: terraform plan
-          command: |
-            git_diff=<< parameters.git_diff >>
-
-            ## Init needed Terraform Vars like ssh keys, ...
-            export TF_VAR_private_key=~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0
-            export TF_VAR_public_key=~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0.pub
-
-            rm -fv terraform-plan.out
-            # otherwise the go-git clone command fails
-            ssh-add -D
-            ssh-add /home/circleci/.ssh/id_rsa_90f40ece92c1ab0618d6086d8b31dfe8
-
-            git --no-pager diff ${git_diff} --name-status --diff-filter=ACMR
-
-            TF_BACKEND_HTTP_ENCRYPTION_PASSPHRASE=${TF_BACKEND_HTTP_ENCRYPTION_PASSPHRASE} terraform-backend-git --access-logs &
-
-            # iterate over the .tfvars and .tf changed files in this pr and try to run terraform plan
-            for tfvarfile in $(git diff ${git_diff} --name-status --diff-filter=ACMR | awk '{print $2}' | grep -E "(.*.tf|.*.tfvars)"); do
-
-              tffile=$(echo $tfvarfile)
-
-              # Avoid multiple terraform plan execution in the same folder because both .tfvars and .tf file were changed.
-              # if the .terraform folder already exist then terraform plan was already executed so skip it.
-              if [[ -d "${tffile}/.terraform" ]]; then
-                echo "Skip Terraform init/plan for target: ${tffile} already done"
-                continue
-              fi
-
-              echo "Running Terraform plan for target: ${tfvarfile}"
-              terraform init -lock-timeout=3m 2>&1 | tee -a terraform-plan.out
-              terraform plan -lock=false -lock-timeout=3m -no-color 2>&1 | tee -a terraform-plan.out
-            done
 
   post-terraform-plan:
     parameters:
@@ -119,8 +69,11 @@ commands:
               github-comment exec --config .circleci/github-comment.yaml -pr ${PR_NUMBER} -k plan -- cat terraform-${cmd}.out
             fi
           when: always
-  run-terraform-apply:
+  run-terraform-command:
     parameters:
+      command:
+        type: string
+        default: "apply"
       git_diff:
         type: string
         default: "origin/master...HEAD"
@@ -136,20 +89,32 @@ commands:
             ssh-keygen -y -f ~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0 > ~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0.pub
 
       - run:
-          name: terraform apply
+          name: terraform << parameters.command >>
           command: |
             git_diff=<< parameters.git_diff >>
+            command=<< parameters.command >>
+            cliargs="-no-color"
+
+            case ${command} in
+              plan)     cliargs="${cliargs} -lock=false"
+                        tfcmd=plan
+                        ;;
+              apply)    cliargs="${cliargs} -auto-approve"
+                        tfcmd=apply
+                        ;;
+              destroy)  cliargs="${cliargs} -destroy -auto-approve"
+                        tfcmd=apply
+                        ;;
+            esac
 
             ## Init needed Terraform Vars like ssh keys, ...
             export TF_VAR_private_key=~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0
             export TF_VAR_public_key=~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0.pub
 
-            rm -fv terraform-apply.out
+            rm -fv terraform-${command}.out
             # otherwise the go-git clone command fails
             ssh-add -D
             ssh-add /home/circleci/.ssh/id_rsa_90f40ece92c1ab0618d6086d8b31dfe8
-
-            rm -fv terraform-apply.out
 
             TF_BACKEND_HTTP_ENCRYPTION_PASSPHRASE=${TF_BACKEND_HTTP_ENCRYPTION_PASSPHRASE} terraform-backend-git --access-logs &
 
@@ -168,61 +133,8 @@ commands:
               fi
 
               echo "Running Terraform plan for target: ${tfvarfile}"
-              terraform init -lock-timeout=3m 2>&1 | tee -a terraform-apply.out
-              terraform apply -lock-timeout=3m -auto-approve -no-color 2>&1 | tee -a terraform-apply.out
-
-            done
-  run-terraform-destroy:
-    parameters:
-      git_diff:
-        type: string
-        default: "origin/master...HEAD"
-    steps:
-      - add_ssh_keys:
-          fingerprints:
-            - "90:f4:0e:ce:92:c1:ab:06:18:d6:08:6d:8b:31:df:e8"
-            - "5f:bb:89:b9:c9:60:4a:bc:2d:9e:6c:f2:80:95:1b:f0"
-
-      - run:
-          name: generate ssh public key
-          command: |
-            ssh-keygen -y -f ~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0 > ~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0.pub
-
-      - run:
-          name: terraform destroy
-          command: |
-            git_diff=<< parameters.git_diff >>
-
-            ## Init needed Terraform Vars like ssh keys, ...
-            export TF_VAR_private_key=~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0
-            export TF_VAR_public_key=~/.ssh/id_rsa_5fbb89b9c9604abc2d9e6cf280951bf0.pub
-
-            rm -fv terraform-apply.out
-            # otherwise the go-git clone command fails
-            ssh-add -D
-            ssh-add /home/circleci/.ssh/id_rsa_90f40ece92c1ab0618d6086d8b31dfe8
-
-            rm -fv terraform-apply.out
-
-            TF_BACKEND_HTTP_ENCRYPTION_PASSPHRASE=${TF_BACKEND_HTTP_ENCRYPTION_PASSPHRASE} terraform-backend-git --access-logs &
-
-            git --no-pager diff ${git_diff} --name-status --diff-filter=ACMR
-
-            # iterate over the .tfvars and .tf changed files in this pr and try to run terraform apply
-            for tfvarfile in $(git diff ${git_diff} --name-status --diff-filter=ACMR | awk '{print $2}' | grep -E "(.*.tf|.*.tfvars)"); do
-
-              tffile=$(echo $tfvarfile)
-
-              # Avoid multiple terraform plan execution in the same folder because both .tfvars and .tf file were changed.
-              # if the .terraform folder already exist then terraform plan was already executed so skip it.
-              if [[ -d "${tffile}/.terraform" ]]; then
-                echo "Skip Terraform init/plan for target: ${tffile} already done"
-                continue
-              fi
-
-              echo "Running Terraform plan for target: ${tfvarfile}"
-              terraform init -lock-timeout=3m 2>&1 | tee -a terraform-destroy.out
-              terraform apply -lock-timeout=3m -destroy -auto-approve -no-color 2>&1 | tee -a terraform-destroy.out
+              terraform init -lock-timeout=3m 2>&1 | tee -a terraform-${command}.out
+              terraform ${tfcmd} -lock-timeout=3m ${cliargs} 2>&1 | tee -a terraform-${command}.out
 
             done
           when: always
@@ -240,7 +152,8 @@ jobs:
     resource_class: small
     steps:
       - checkout
-      - run-terraform-plan
+      - run-terraform-command:
+          command: plan
       - store_artifacts:
           path: ./terraform-plan.out
           destination: terraform-plan.out
@@ -256,7 +169,8 @@ jobs:
         default: false
     steps:
       - checkout
-      - run-terraform-apply
+      - run-terraform-command:
+          command: apply
         # git_diff: HEAD~1
       - store_artifacts:
           path: ./terraform-apply.out
@@ -267,8 +181,8 @@ jobs:
       - when:
           condition: << parameters.destroy >>
           steps:
-          - run-terraform-destroy
-
+          - run-terraform-command:
+              command: destroy
             # git_diff: HEAD~1
           - store_artifacts:
               path: ./terraform-destroy.out
