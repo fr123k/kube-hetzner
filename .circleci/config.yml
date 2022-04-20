@@ -25,6 +25,8 @@ preflight-non-master-filter: &preflight-non-master-filter
     - preflight
 
 version: 2.1
+orbs:
+  vpn: titel-media/wireguard@0.2.1
 commands:
   run-terraform-fmt:
     steps:
@@ -138,6 +140,13 @@ commands:
 
             done
           when: always
+  connect-wireguard:
+    steps:
+      - vpn/install
+      - vpn/initialize
+      - vpn/connect
+      - run: curl ifconfig.me.
+      - vpn/disconnect
 
 jobs:
   preflight:
@@ -190,12 +199,20 @@ jobs:
           - post-terraform-plan:
               command: destroy
               # pr_number: "git log --format=format:%s -n 1 | grep -Eo '#([0-9]*)' | cut -c 2-"
+  wireguard:
+    docker: *circleci-image
+    resource_class: small
+    environment:
+      WIREGUARD_CONFIG: "W0ludGVyZmFjZV0KQWRkcmVzcyA9IDEwLjguMC42LzMyClByaXZhdGVLZXkgPSBnTGRRSVhmM0pmaU9udlBpTytMemE1Vmx4U0tsd2FWSHpKeHdxOSs4MUZVPQpETlMgPSAxLjEuMS4xCgpbUGVlcl0KUHVibGljS2V5ID0gc2xWNUxxRmtLTHcxdklCSnRYY0xCNFhMM3ZjTmd2clZua210Zm5DZ2FGND0KUHJlc2hhcmVkS2V5ID0ganh5bnJCcmRZMzY0WVh5M0FwTWRxZnRvYktWRElPTGc5QUVGaHhPQy9KWT0KQWxsb3dlZElQcyA9IDAuMC4wLjAvMApFbmRwb2ludCA9IDQ5LjEyLjE5NS41OjUxODIwClBlcnNpc3RlbnRLZWVwYWxpdmUgPSAxNQo="
+    steps:
+      - connect-wireguard
 
 workflows:
   preflight:
     jobs:
       - preflight:
           <<: *non-master-filter
+      - wireguard
       - terraform-plan:
           <<: *preflight-non-master-filter
   rollout:
