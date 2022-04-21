@@ -148,7 +148,8 @@ commands:
             sudo apt-get update
             sudo apt-get install resolvconf
             echo -n "${WIREGUARD_CONFIG:?}" | \
-              base64 -d > wg0.conf
+              base64 -d | \
+              sed "s/0.0.0.0\/0/10.0.0.0\/8/g" > wg0.conf
             sudo mkdir -p /etc/wireguard
             sudo mv wg0.conf /etc/wireguard/wg0.conf
             sudo chmod 600 /etc/wireguard/wg0.conf
@@ -163,7 +164,8 @@ commands:
       - vpn/install
       # - vpn/initialize
       - vpn/connect
-      - run: sudo systemctl status wg-quick@wg0.service
+      - run: ping 10.8.0.3 -c 4
+      - run: ping 10.0.0.2 -c 400
       - run: curl ifconfig.me.
       # - vpn/disconnect
 

@@ -22,14 +22,14 @@ resource "hcloud_ssh_key" "default" {
 
 resource "hcloud_network" "k3s" {
   name     = "k3s-net"
-  ip_range = "10.0.0.0/8"
+  ip_range = "10.0.0.0/16"
 }
 
 resource "hcloud_network_subnet" "k3s" {
   network_id   = hcloud_network.k3s.id
   type         = "cloud"
   network_zone = "eu-central"
-  ip_range     = "10.0.0.0/16"
+  ip_range     = "10.0.0.0/24"
 }
 
 resource "hcloud_firewall" "k3s" {

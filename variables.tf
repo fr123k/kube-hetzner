@@ -29,7 +29,7 @@ variable "agents_num" {
 
 variable "location" {
   description = "Default server location"
-  default     = "fsn1"
+  default     = "nbg1"
 }
 
 variable "control_plane_server_type" {
