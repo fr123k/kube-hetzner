@@ -140,13 +140,32 @@ commands:
 
             done
           when: always
+  install-dependency:
+    steps:
+      - run:
+          name: install wireguard dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install resolvconf
+            echo -n "${WIREGUARD_CONFIG:?}" | \
+              base64 -d > wg0.conf
+            sudo mkdir -p /etc/wireguard
+            sudo mv wg0.conf /etc/wireguard/wg0.conf
+            sudo chmod 600 /etc/wireguard/wg0.conf
+  wgconf:
+    steps:
+      - run:
+          name: cat wg.conf
+          command: |
+            sudo cat /etc/wireguard/wg0.conf
   connect-wireguard:
     steps:
       - vpn/install
-      - vpn/initialize
+      # - vpn/initialize
       - vpn/connect
+      - run: sudo systemctl status wg-quick@wg0.service
       - run: curl ifconfig.me.
-      - vpn/disconnect
+      # - vpn/disconnect
 
 jobs:
   preflight:
@@ -200,12 +219,15 @@ jobs:
               command: destroy
               # pr_number: "git log --format=format:%s -n 1 | grep -Eo '#([0-9]*)' | cut -c 2-"
   wireguard:
-    docker: *circleci-image
-    resource_class: small
+    machine:
+      image: ubuntu-2004:current
+    resource_class: medium
     environment:
       WIREGUARD_CONFIG: "W0ludGVyZmFjZV0KQWRkcmVzcyA9IDEwLjguMC42LzMyClByaXZhdGVLZXkgPSBnTGRRSVhmM0pmaU9udlBpTytMemE1Vmx4U0tsd2FWSHpKeHdxOSs4MUZVPQpETlMgPSAxLjEuMS4xCgpbUGVlcl0KUHVibGljS2V5ID0gc2xWNUxxRmtLTHcxdklCSnRYY0xCNFhMM3ZjTmd2clZua210Zm5DZ2FGND0KUHJlc2hhcmVkS2V5ID0ganh5bnJCcmRZMzY0WVh5M0FwTWRxZnRvYktWRElPTGc5QUVGaHhPQy9KWT0KQWxsb3dlZElQcyA9IDAuMC4wLjAvMApFbmRwb2ludCA9IDQ5LjEyLjE5NS41OjUxODIwClBlcnNpc3RlbnRLZWVwYWxpdmUgPSAxNQo="
     steps:
+      - install-dependency
       - connect-wireguard
+      - wgconf
 
 workflows:
   preflight:
