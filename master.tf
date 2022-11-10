@@ -26,6 +26,7 @@ resource "hcloud_server" "first_control_plane" {
       user        = "root"
       private_key = file(var.private_key)
       host        = self.ipv4_address
+      # bastion_host = data.hcloud_server.wireguard.ipv4_address
     }
   }
 
@@ -37,6 +38,7 @@ resource "hcloud_server" "first_control_plane" {
       user        = "root"
       private_key = file(var.private_key)
       host        = self.ipv4_address
+      # bastion_host = data.hcloud_server.wireguard.ipv4_address
     }
   }
 

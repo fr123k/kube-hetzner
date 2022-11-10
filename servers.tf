@@ -28,7 +28,7 @@ resource "hcloud_server" "control_planes" {
     connection {
       user        = "root"
       private_key = file(var.private_key)
-      host        = self.network.*.fixed_ip_v4[0]
+      host        = self.ipv4_address
     }
   }
 
@@ -39,7 +39,7 @@ resource "hcloud_server" "control_planes" {
     connection {
       user        = "root"
       private_key = file(var.private_key)
-      host        = self.network.*.fixed_ip_v4[0]
+      host        = self.ipv4_address
     }
   }
 
