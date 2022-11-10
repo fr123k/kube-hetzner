@@ -2,8 +2,8 @@ resource "hcloud_server" "control_planes" {
   count = var.servers_num - 1
   name  = "k3s-control-plane-${count.index + 1}"
 
-  image        = data.hcloud_image.linux.name
-  rescue       = "linux64"
+  image = data.hcloud_image.linux.name
+  #   rescue       = "linux64"
   server_type  = var.control_plane_server_type
   location     = var.location
   ssh_keys     = [hcloud_ssh_key.default.id]

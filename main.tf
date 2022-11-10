@@ -1,3 +1,11 @@
+terraform {
+  backend "http" {
+    address        = "http://localhost:6061/?type=git&repository=git@github.com:fr123k/tf-state.git&ref=main&state=hetzner/kube/state.json"
+    lock_address   = "http://localhost:6061/?type=git&repository=git@github.com:fr123k/tf-state.git&ref=main&state=hetzner/kube/state.json"
+    unlock_address = "http://localhost:6061/?type=git&repository=git@github.com:fr123k/tf-state.git&ref=main&state=hetzner/kube/state.json"
+  }
+}
+
 data "hcloud_server" "wireguard" {
   name = "wireguard"
 }
@@ -14,14 +22,14 @@ resource "hcloud_ssh_key" "default" {
 
 resource "hcloud_network" "k3s" {
   name     = "k3s-net"
-  ip_range = "10.0.0.0/8"
+  ip_range = "10.0.0.0/16"
 }
 
 resource "hcloud_network_subnet" "k3s" {
   network_id   = hcloud_network.k3s.id
   type         = "cloud"
   network_zone = "eu-central"
-  ip_range     = "10.0.0.0/16"
+  ip_range     = "10.0.0.0/24"
 }
 
 resource "hcloud_firewall" "k3s" {
@@ -35,7 +43,7 @@ resource "hcloud_firewall" "k3s" {
     port      = "any"
     source_ips = [
       "127.0.0.1/32",
-      "10.0.0.0/8",
+      "10.0.0.0/16",
       "169.254.169.254/32",
       "213.239.246.1/32"
     ]
@@ -46,7 +54,7 @@ resource "hcloud_firewall" "k3s" {
     port      = "any"
     source_ips = [
       "127.0.0.1/32",
-      "10.0.0.0/8",
+      "10.0.0.0/16",
       "169.254.169.254/32",
       "213.239.246.1/32"
     ]
@@ -56,7 +64,7 @@ resource "hcloud_firewall" "k3s" {
     protocol  = "icmp"
     source_ips = [
       "127.0.0.1/32",
-      "10.0.0.0/8",
+      "10.0.0.0/16",
       "169.254.169.254/32",
       "213.239.246.1/32"
     ]
@@ -96,7 +104,7 @@ resource "hcloud_firewall" "k3s" {
 locals {
   first_control_plane_network_ip = cidrhost(hcloud_network.k3s.ip_range, 2)
   ssh_public_key                 = trimspace(file(var.public_key))
-  hcloud_image_name = "ubuntu-20.04"
+  hcloud_image_name              = "ubuntu-20.04"
 
   k3os_install_commands = [
     "apt install -y grub-efi grub-pc-bin mtools xorriso",

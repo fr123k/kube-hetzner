@@ -1,0 +1,84 @@
+---
+skip_no_token: true
+complement:
+  pr:
+    - type: envsubst
+      value: "${PR_NUMBER}"
+  org:
+    - type: envsubst
+      value: "${CIRCLE_PROJECT_USERNAME}"
+  repo:
+    - type: envsubst
+      value: "${CIRCLE_PROJECT_REPONAME}"
+  sha1:
+    - type: envsubst
+      value: "${CIRCLE_SHA1}"
+templates:
+  header: '## Terraform {{ Env "CMD"}} {{ Env "ENV" }} [job]({{ env "CIRCLE_BUILD_URL" }}) {{ .SHA1 }}'
+exec:
+  plan:
+    - when: Env("TERRAFORM_ERROR") == ""
+      template: |
+        {{ template "header" . }} :white_check_mark:
+
+        Plan Summary:
+        ```bash
+        {{ Env "TERRAFORM_PLAN_SUMMARY" }}
+        ```
+
+        Resource Summary:
+        ```
+        {{ Env "TERRAFORM_RESOURCE_SUMMARY" | AvoidHTMLEscape }}
+        ```
+
+        <details>
+            <summary>Show Details:</summary>
+
+        ```bash
+        {{ .Stdout | AvoidHTMLEscape }}
+        ```
+        </details>
+
+      template_for_too_long: |
+        {{ template "header" . }} :white_check_mark:
+
+        Plan Summary:
+
+        ```bash
+        {{ Env "TERRAFORM_PLAN_SUMMARY"}}
+        ```
+
+        [Full Output]({{ env "CIRCLE_BUILD_URL" }})
+
+    - when: Env("TERRAFORM_ERROR") != ""
+      template: |
+        {{ template "header" . }} :x:
+
+        Error Summary:
+
+        ```bash
+        {{ Env "TERRAFORM_ERROR" | AvoidHTMLEscape }}
+        ```
+
+        <details>
+            <summary>Show Details:</summary>
+
+        ```bash
+        {{ .Stdout | AvoidHTMLEscape }}
+        ```
+        </details>
+
+      template_for_too_long: |
+        {{template "header" .}} :x:
+
+        Error Summary:
+
+        ```bash
+        {{ Env "TERRAFORM_ERROR" | AvoidHTMLEscape }}
+        ```
+
+        [Full Output]({{ env "CIRCLE_BUILD_URL" }})
+
+hide:
+  default: "true"
+  plan: "Comment.HasMeta && (Comment.Meta.SHA1 != Commit.SHA1)"
